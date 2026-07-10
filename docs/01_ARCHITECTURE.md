@@ -14,7 +14,7 @@
 graph TB
     subgraph UserEnvironment[User's Desktop Environment]
         User[👤 User]
-        OS[Operating System<br/>Windows/Linux/macOS]
+        OS[Operating System<br/>Windows 11 / WSL2]
         Apps[Applications<br/>IDE, Browser, Terminal, etc.]
         Files[File System]
     end
@@ -24,37 +24,54 @@ graph TB
         UI[Overlay & Character Runtime]
         Planner[Task Planner]
         Memory[Memory System]
-        Models[Model Providers]
         Skills[Skill Registry]
         Tools[Tool Execution]
         Plugins[Plugin Manager]
     end
 
+    subgraph NemoClaw[NemoClaw Foundation - NVIDIA OpenSource]
+        Sandbox[OpenShell Sandbox<br/>Container Runtime]
+        AgentRuntime[Agent Runtime<br/>OpenClaw / Hermes Compatible]
+        InferenceRouter[Routed Inference]
+        NetworkPolicy[Network Policies]
+        Blueprint[Blueprint Orchestration]
+        ModelProvider[Model Providers<br/>Ollama / OpenRouter / NIM / OpenAI / Anthropic / Gemini]
+    end
+
     subgraph External[External Services]
-        Ollama[Ollama Server<br/>Local Models]
+        Ollama[Ollama Server<br/>Windows Host — Existing Installation]
         Browser[Browser Automation<br/>Playwright]
         MCP[MCP Servers]
-        CloudAI[User Cloud AI<br/>ChatGPT/Gemini/GLM]
+        CloudAI[Cloud AI APIs<br/>OpenRouter / NIM / OpenAI / Anthropic / Gemini]
     end
 
     User -->|Hotkey / Voice| UI
     UI -->|Events| Core
     Core -->|Tasks| Planner
     Core -->|Context| Memory
-    Core -->|Reasoning| Models
     Core -->|Execute| Skills
     Skills -->|Actions| Tools
     Tools -->|OS Calls| OS
     Tools -->|File Ops| Files
     Tools -->|Browser| Browser
     Tools -->|MCP| MCP
-    Models -->|Inference| Ollama
-    Browser -->|Automation| CloudAI
+    Core -->|Agent Lifecycle| Sandbox
+    Sandbox -->|Managed Inference| InferenceRouter
+    InferenceRouter -->|Priority 1| ModelProvider
+    ModelProvider -->|Ollama (HTTP)| Ollama
+    ModelProvider -->|Cloud APIs| CloudAI
+    Blueprint -->|Declares| Sandbox
+    NetworkPolicy -->|Governs| Sandbox
+    AgentRuntime -->|Runs Inside| Sandbox
     Plugins -.->|Extend| Core
     Plugins -.->|Extend| Skills
-    Plugins -.->|Extend| Models
     Plugins -.->|Extend| Memory
-    Plugins -.->|Extend| UI
+    Plugins -.->|Extend| ModelProvider
+
+    style NemoClaw fill:#76b900,color:#fff,stroke:#333
+    style Sandbox fill:#76b900,color:#fff
+    style InferenceRouter fill:#76b900,color:#fff
+    style ModelProvider fill:#76b900,color:#fff
 ```
 
 ### 1.2 Core Principles (from ARCHITECTURE_PRINCIPLES.md)
@@ -80,7 +97,7 @@ graph TB
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                           CHAROS CORE (Rust/TypeScript)                     │
+│                         CHAROS (Tauri + React)                              │
 │  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐       │
 │  │ Orchestrator │ │  Event Bus   │ │ Config System│ │Plugin Registry│       │
 │  └──────┬───────┘ └──────┬───────┘ └──────┬───────┘ └──────┬───────┘       │
@@ -89,17 +106,24 @@ graph TB
     ┌─────┴─────┐    ┌─────┴─────┐    ┌─────┴─────┐    ┌─────┴─────┐
     ▼           ▼    ▼           ▼    ▼           ▼    ▼           ▼
 ┌────────┐ ┌──────────┐ ┌────────┐ ┌──────────┐ ┌────────┐ ┌──────────┐
-│Character│ │ Planner  │ │ Memory │ │ Models   │ │ Skills │ │ Tools    │
+│Character│ │ Planner  │ │ Memory │ │ Skills   │ │ Tools  │ │ Plugins  │
 │Runtime │ │          │ │        │ │          │ │        │ │          │
 └────────┘ └──────────┘ └────────┘ └──────────┘ └────────┘ └──────────┘
     │           │          │          │          │          │
     ▼           ▼          ▼          ▼          ▼          ▼
 ┌────────┐ ┌──────────┐ ┌────────┐ ┌──────────┐ ┌────────┐ ┌──────────┐
-│VRM/Anim│ │Task Graph│ │Working │ │Reasoning │ │File    │ │Shell     │
-│Speech  │ │Router    │ │Episodic│ │Vision    │ │Terminal│ │Browser   │
-│Bubbles │ │Scheduler │ │Semantic│ │Speech    │ │Git     │ │MCP       │
-│Overlay │ │          │ │Consolid│ │Router    │ │Browser │ │          │
+│VRM/Anim│ │Task Graph│ │Working │ │File      │ │Shell   │ │NemoClaw  │
+│Speech  │ │Router    │ │Episodic│ │Terminal  │ │Browser │ │Plugin    │
+│Bubbles │ │Scheduler │ │Semantic│ │Git       │ │MCP     │ │Adapter   │
+│Overlay │ │          │ │Consolid│ │Browser   │ │        │ │          │
 └────────┘ └──────────┘ └────────┘ └──────────┘ └────────┘ └──────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                     NEMOCLAW (NVIDIA OpenShell)                             │
+│  ┌──────────────────┐ ┌──────────────────┐ ┌───────────────────────────┐    │
+│  │  OpenShell       │ │  Routed          │ │  Blueprint Orchestration  │    │
+│  │  Sandbox Runtime │ │  Inference       │ │  + Network Policies       │    │
+│  └──────────────────┘ └──────────────────┘ └───────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### 2.2 Subsystem Responsibilities
@@ -111,11 +135,11 @@ graph TB
 | **Config System** | Hierarchical config (defaults → user → project → env) | `ConfigProvider`, `ConfigSchema` | Reactive |
 | **Plugin Registry** | Discovery, loading, validation, lifecycle | `PluginProvider`, `PluginManifest` | Dynamic |
 | **Character Runtime** | Avatar rendering, animation state machine, speech bubbles | `CharacterProvider`, `AnimationController` | State Machine |
-| **Planner** | Goal decomposition, task graph creation, model routing | `Planner`, `TaskGraph`, `ModelRouter` | Stateless per task |
+| **Planner** | Goal decomposition, task graph creation | `Planner`, `TaskGraph` | Stateless per task |
 | **Memory System** | Multi-layer storage, retrieval, consolidation | `MemoryProvider`, `ContextEngine` | Persistent |
-| **Model Providers** | Unified interface for reasoning/vision/speech | `ReasoningProvider`, `VisionProvider`, `SpeechProvider` | Pooled |
 | **Skill Registry** | Capability discovery, parameter validation, execution | `SkillProvider`, `SkillManifest` | Dynamic |
 | **Tool Execution** | Safe OS interaction, permissions, audit logging | `ToolProvider`, `PermissionManager` | Ephemeral |
+| **NemoClaw Foundation** | Sandboxed agent runtime, routed inference, network policy | `NemoClawCLI`, `SandboxAPI`, `InferenceAPI` | External Process |
 
 ---
 
@@ -130,32 +154,52 @@ sequenceDiagram
     participant UI as Overlay/UI
     participant Core as Orchestrator
     participant Planner as Task Planner
-    participant Router as Model Router
-    participant Model as Reasoning Provider
+    participant Memory as Memory System
     participant Skills as Skill Registry
     participant Tools as Tool Execution
-    participant Memory as Memory System
     participant Char as Character Runtime
+    participant NemoClaw as NemoClaw Foundation
+    participant Sandbox as OpenShell Sandbox
+    participant Inference as Routed Inference
+    participant Model as Model Provider
+    participant Ollama as Ollama (Windows)
 
     User->>UI: Hotkey / Voice Input
     UI->>Core: UserInputEvent{input, modality}
     Core->>Memory: retrieveContext(taskType)
     Memory-->>Core: ContextBundle{working, episodic, semantic}
     Core->>Planner: planGoal(goal, context)
-    Planner->>Router: selectModel(taskType, complexity)
-    Router-->>Planner: ModelSelection{provider, model, params}
-    Planner->>Model: reason(prompt, context, tools)
-    Model-->>Planner: Plan{taskGraph, reasoning}
-    Planner->>Core: TaskPlan{graph, metadata}
-    Core->>Char: StateChange{Thinking/Planning}
-    loop For each task in graph
+    
+    Note over NemoClaw: NemoClaw manages agent lifecycle
+    NemoClaw->>Sandbox: createSandbox(blueprint)
+    Sandbox-->>NemoClaw: SandboxReady{id, endpoint}
+    NemoClaw->>Inference: configureRouting{providers, priority}
+    
+    Core->>NemoClaw: submitPlan(taskGraph)
+    NemoClaw->>Sandbox: executeAgent(plan)
+    
+    loop For each reasoning step
+        Sandbox->>Inference: reason(prompt, context)
+        Inference->>Model: route(taskType, complexity)
+        Model->>Ollama: complete(request)
+        Ollama-->>Model: response
+        Model-->>Inference: completion
+        Inference-->>Sandbox: result
+    end
+    
+    Sandbox-->>NemoClaw: AgentResult{output, artifacts}
+    NemoClaw-->>Core: TaskResult{output, metadata}
+    
+    Core->>Char: StateChange{Thinking/Working/Speaking}
+    
+    loop For each tool execution
         Core->>Skills: executeSkill(skillName, params)
         Skills->>Tools: executeTool(toolName, args)
         Tools-->>Skills: ToolResult{output, artifacts}
         Skills-->>Core: SkillResult{output, sideEffects}
         Core->>Memory: storeEpisodic(event)
-        Core->>Char: StateChange{Working/Speaking}
     end
+    
     Core->>Memory: consolidate(session)
     Core->>Char: StateChange{Idle}
     UI->>User: Result + Speech Bubble
@@ -471,16 +515,36 @@ graph TB
         State[UI State Management]
     end
 
-    subgraph SidecarProcesses[Sidecar Processes<br/>Optional, Isolated]
-        STT[Speech-to-Text<br/>Handy-Parakeet]
-        Models[Model Runners<br/>Ollama/llama.cpp]
-        Skills[Skill Workers<br/>Node.js/Deno/Python]
-        Browser[Browser Automation<br/>Playwright]
+    subgraph NemoClawLayer[NemoClaw Foundation]
+        NemoCLI[NemoClaw CLI<br/>TypeScript]
+        Blueprint[Blueprint Engine]
+        InferenceRouter[Routed Inference]
+        SandboxMgr[Sandbox Manager]
+    end
+
+    subgraph Sandboxes[OpenShell Sandboxes - Containers]
+        AgentRuntime[CharOS Agent Runtime<br/>OpenClaw Compatible]
+        SkillWorkers[Skill Workers<br/>Node.js/Python]
+    end
+
+    subgraph External[External Services]
+        Ollama[Ollama - Windows Host]
+        CloudAI[Cloud AI APIs<br/>OpenRouter / NIM / OpenAI / Anthropic / Gemini]
     end
 
     MainProcess <--->|Tauri Commands| RendererProcess
-    MainProcess <--->|gRPC/JSON-RPC| SidecarProcesses
-    SidecarProcesses <--->|MCP/HTTP| ExternalServices[External Services]
+    MainProcess <--->|NemoClaw CLI (subprocess)| NemoCLI
+    NemoCLI --> Blueprint
+    Blueprint --> SandboxMgr
+    SandboxMgr -->|Docker| Sandboxes
+    Sandboxes -->|Inference| InferenceRouter
+    InferenceRouter --> Ollama
+    InferenceRouter --> CloudAI
+    Sandboxes --> SkillWorkers
+    
+    style NemoClawLayer fill:#76b900,color:#fff
+    style Sandboxes fill:#76b900,color:#fff
+    style InferenceRouter fill:#76b900,color:#fff
 ```
 
 ### 5.2 Communication Patterns
@@ -489,48 +553,65 @@ graph TB
 |------|----------|----------|
 | Main ↔ Renderer | Tauri Commands (Invoke) | UI actions, config, synchronous requests |
 | Main ↔ Renderer | Tauri Events (Emit/Listen) | State updates, notifications, streaming |
-| Main ↔ Sidecars | gRPC / JSON-RPC over stdio | High-throughput model inference, skills |
-| Sidecars ↔ External | HTTP / MCP / WebSocket | Ollama, browser automation, cloud APIs |
+| Main ↔ NemoClaw CLI | Subprocess (JSON-RPC / stdio) | Agent lifecycle, sandbox management, inference |
+| NemoClaw ↔ Sandboxes | Docker API | Container lifecycle |
+| Sandboxes ↔ Inference Router | HTTP / gRPC | Model inference requests |
+| Inference Router ↔ Ollama | HTTP (Ollama API) | Local model inference (Windows host) |
+| Inference Router ↔ Cloud APIs | HTTPS (REST) | Cloud model inference |
+| Skills ↔ External | MCP / WebSocket | Browser automation, file operations |
 | Main ↔ OS | Native APIs | Hotkeys, file watchers, notifications, tray |
 
 ### 5.3 Security Boundaries
 
 ```mermaid
-graph LR
+graph TB
     subgraph Trusted[Trusted - Main Process]
         Core[Orchestrator]
         Permissions[Permission Manager]
         Keyring[Credential Store]
     end
 
-    subgraph Untrusted[Untrusted - Renderer/Sidecars]
-        UI[Overlay UI]
-        STT[STT Sidecar]
-        Skills[Skill Workers]
-        Browser[Browser Automation]
+    subgraph NemoClawManaged[NemoClaw Managed - Sandboxed]
+        NemoCLI[NemoClaw CLI]
+        Blueprint[Blueprint Engine]
+        Inference[Inference Router]
+        Sandbox[OpenShell Sandbox]
+        Agent[CharOS Agent Runtime]
+        SkillProcs[Skill Workers]
     end
 
     subgraph External[External]
-        Ollama[Ollama]
-        Cloud[Cloud AI]
+        Ollama[Ollama - Windows Host]
+        Cloud[Cloud AI APIs]
         MCP[MCP Servers]
     end
 
     Core -->|Capability Tokens| Permissions
-    Permissions -->|Grants| Skills
-    Permissions -->|Grants| Browser
-    Skills -->|Sandboxed| OS
-    Browser -->|Isolated| Cloud
-    Core -->|Config| Ollama
+    Permissions -->|Grants| NemoCLI
+    NemoCLI -->|Blueprint| Blueprint
+    Blueprint -->|Lifecycle| Sandbox
+    Sandbox -->|Sandboxed| Agent
+    Agent -->|Inference| Inference
+    Inference -->|Policies| Ollama
+    Inference -->|Policies| Cloud
+    Sandbox -.->|Network Policy| External
+    SkillProcs -.->|MCP| MCP
+    Keyring -->|Credentials| Inference
+    
+    style NemoClawManaged fill:#76b900,color:#fff
+    style Sandbox fill:#76b900,color:#fff
+    style Inference fill:#76b900,color:#fff
 ```
 
 | Boundary | Mechanism |
 |----------|-----------|
 | Main ↔ Renderer | Tauri capability-based permissions (no Node.js in renderer) |
-| Main ↔ Sidecars | Process isolation + JSON-RPC with schema validation |
-| Skills ↔ OS | Permission manager: each tool declares required permissions |
-| Browser ↔ Cloud | Isolated Playwright profile, no access to user's main browser |
-| Credentials | OS keyring (Windows Credential Manager, libsecret, Keychain) |
+| Main ↔ NemoClaw CLI | Subprocess JSON-RPC with schema validation |
+| NemoClaw ↔ Sandbox | Docker container isolation + network policies |
+| Sandbox ↔ External | NemoClaw network policy engine (egress control, presets) |
+| Sandbox ↔ Ollama | Local network (WSL → Windows host.docker.internal) |
+| Credentials | OS keyring + NemoClaw credential sanitization |
+| Skill Workers ↔ Host | Permission manager + NemoClaw SSRF validation |
 
 ---
 

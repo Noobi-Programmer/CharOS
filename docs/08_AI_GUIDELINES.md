@@ -117,6 +117,9 @@ graph TB
 > **All providers MUST implement the same `ModelProvider` interface.**
 >
 > **Never hardcode a provider.** The router selects based on capability, health, and priority.
+>
+> **Inference routing is managed by NemoClaw's Routed Inference — not by CharOS.**
+> CharOS submits tasks to NemoClaw; NemoClaw handles provider selection and fallback chains.
 
 ### 2.4 Provider Registration
 
@@ -151,6 +154,7 @@ graph TB
 | **Development** | WSL2 Ubuntu |
 | **Ollama** | **Already installed on Windows host** — **Do NOT reinstall** |
 | **Communication** | WSL → Windows Ollama via `http://host.docker.internal:11434` or `http://172.17.0.1:11434` |
+| **Foundation** | **NemoClaw** — NVIDIA open-source sandbox agent runtime |
 
 ### 2.5.2 Existing Models (Auto-Detected)
 
@@ -162,7 +166,7 @@ The following models are already available in the Windows Ollama installation:
 | **gemma-4-heretic** (abliterated) | General/Creative | Conversation, planning, summarization |
 | *Others* | Auto-discovered | Listed via `/api/tags` at runtime |
 
-> **CharOS MUST auto-detect available models at startup.**
+> **CharOS MUST auto-detect available models at startup via NemoClaw.**
 >
 > **Never download models unless explicitly requested by user.**
 
@@ -171,35 +175,37 @@ The following models are already available in the Windows Ollama installation:
 > **CharOS must never assume where inference happens.**
 >
 > Inference may run:
-> - Locally via Ollama (Windows host, accessed from WSL)
-> - Remotely via OpenRouter
-> - Via NVIDIA NIM
-> - Via another provider
+> - Locally via Ollama (Windows host, accessed from WSL via NemoClaw)
+> - Remotely via OpenRouter (via NemoClaw)
+> - Via NVIDIA NIM (via NemoClaw)
+> - Via another provider managed by NemoClaw
 >
 > **The rest of CharOS must not know or care.**
 >
-> All inference goes through a unified `ModelProvider` interface.
+> **CharOS communicates with NemoClaw CLI. NemoClaw manages inference routing.**
 
 ```typescript
+// CharOS talks to NemoClaw, NOT to providers directly
+interface NemoClawAdapter {
+  executeTask(task: Task, context: ContextBundle): Promise<TaskResult>;
+  listModels(): Promise<ModelInfo[]>;
+  checkHealth(): Promise<boolean>;
+  createSandbox(blueprint: BlueprintConfig): Promise<SandboxHandle>;
+  destroySandbox(handle: SandboxHandle): Promise<void>;
+}
+
+// NemoClaw internally uses ModelProvider for each provider
 interface ModelProvider {
   readonly id: string;
   readonly name: string;
   readonly capabilities: ModelCapability[];
   readonly priority: number;
-  
-  // Lifecycle
   initialize(config: ProviderConfig): Promise<void>;
   isHealthy(): Promise<boolean>;
   dispose(): Promise<void>;
-  
-  // Model discovery
   listModels(): Promise<ModelInfo[]>;
-  
-  // Inference
   complete(request: CompletionRequest): Promise<CompletionResponse>;
   stream(request: CompletionRequest): AsyncIterable<CompletionChunk>;
-  
-  // Health & metadata
   getStatus(): ProviderStatus;
 }
 ```

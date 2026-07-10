@@ -227,9 +227,22 @@ Not:
 
 Routing, orchestration, and providers are implementation details.
 
+# 18. NemoClaw Foundation
+
+CharOS builds on top of NemoClaw.
+
+CharOS must never reimplement what NemoClaw provides:
+
+-   sandboxed agent runtime (OpenShell)
+-   inference routing and provider management
+-   network policy enforcement
+-   blueprint orchestration
+
+CharOS communicates with NemoClaw through its CLI or API---not directly with model providers.
+
 ------------------------------------------------------------------------
 
-# 18. Backward Compatibility
+# 19. Backward Compatibility
 
 Public interfaces should evolve carefully.
 
@@ -237,18 +250,18 @@ Deprecate before removing.
 
 Document breaking changes.
 
-------------------------------------------------------------------------
+-----------------------------------------------------------------------
 
-# 19. Open-Source Friendly
+# 20. Open-Source Friendly
 
 Optimize for readability over cleverness.
 
 Future contributors should understand the project without needing its
 original authors.
 
-------------------------------------------------------------------------
+-----------------------------------------------------------------------
 
-# 20. Architectural Decision Records (ADR)
+# 21. Architectural Decision Records (ADR)
 
 Every major decision should produce an ADR.
 
