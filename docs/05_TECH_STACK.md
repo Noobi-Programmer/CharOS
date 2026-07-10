@@ -5,6 +5,48 @@
 
 ---
 
+## 0. Development Environment
+
+### 0.1 Operating System & Runtime
+
+| Component | Details |
+|-----------|---------|
+| **Host OS** | Windows 11 |
+| **Development Environment** | WSL2 Ubuntu |
+| **Primary Shell** | zsh (Oh My Zsh) |
+| **Package Manager** | apt (WSL), winget/scoop (Windows) |
+
+### 0.2 Existing AI Infrastructure
+
+**Ollama is ALREADY installed on Windows.**
+
+- **Do NOT reinstall Ollama.**
+- **Do NOT create another Ollama instance in WSL.**
+- Reuse the existing Windows Ollama server from WSL.
+- WSL connects to Windows Ollama via `http://host.docker.internal:11434` (or `http://172.17.0.1:11434` / `http://$(cat /etc/resolv.conf | grep nameserver | awk '{print $2}'):11434`).
+
+**Existing Models (already installed):**
+- `qwen3:14b` (code/reasoning)
+- `gemma-4-heretic` / `gemma-4-abliterated` (general reasoning)
+- Additional models available — detect dynamically at runtime.
+
+**Provider Detection Logic:**
+```typescript
+async function detectOllamaEndpoint(): Promise<string> {
+  const candidates = [
+    'http://host.docker.internal:11434',
+    'http://172.17.0.1:11434',
+    `http://${getWindowsHostIP()}:11434`
+  ];
+  for (const url of candidates) {
+    if (await checkHealth(url)) return url;
+  }
+  throw new Error('Ollama not reachable from WSL');
+}
+```
+
+---
+
 ## 1. Technology Philosophy
 
 ### 1.1 Technology Selection Principles
@@ -21,6 +63,20 @@
 | **Community** | Active, well-supported ecosystems | npm, Rust Cargo, GitHub |
 | **Maintainability** | Readable, well-documented code | TypeScript over JavaScript |
 | **Extensibility** | Plugin architecture, clear interfaces | Provider pattern, Event Bus |
+
+### 1.2 Current Development Environment
+
+| Component | Configuration |
+|-----------|---------------|
+| **Host OS** | Windows 11 |
+| **Development Runtime** | WSL2 (Ubuntu) |
+| **Ollama** | **Pre-installed on Windows host** — reuse existing instance |
+| **WSL → Windows Ollama** | `http://host.docker.internal:11434` or `http://172.17.0.1:11434` |
+| **Existing Models** | `qwen3:14b`, `gemma-4-heretic` (abliterated), auto-discover others |
+
+> **Do NOT install Ollama in WSL. Do NOT create another Ollama instance.**
+>
+> **Reuse the Windows Ollama daemon. Auto-detect models at runtime.**
 
 ### 1.2 The CharOS Stack Metaphor
 
@@ -242,10 +298,17 @@ jobs:
 | Component | Technology | Version | Rationale |
 |-----------|------------|---------|-----------|
 | **Speech Recognition** | Handy Parakeet | v3 | Local-first, optimized for voice commands |
-| **LLM Runtime** | llama.cpp | latest | Lightweight, customizable |
+| **LLM Runtime** | **Ollama (Windows host)** | latest | **Already installed — reuse existing daemon** |
+| **Local Models** | Auto-detected | runtime | `qwen3:14b`, `gemma-4-heretic`, others via `/api/tags` |
 | **Vision** | Qwen2-VL | latest | High accuracy, local execution |
 | **Code Generation** | Qwen3 Coder Heretic | latest | Specialized for coding tasks |
-| **Cloud Fallback** | OpenAI/Gemini/GLM | through API | Complex reasoning, broader knowledge |
+| **Cloud Fallback (Priority 2)** | OpenRouter | via API | Multi-model gateway for complex reasoning |
+| **Cloud Fallback (Priority 3)** | NVIDIA NIM | via API | Enterprise/local GPU accelerated |
+| **Cloud Fallback (Priority 4)** | OpenAI | via API | GPT-4o, o1 for complex tasks |
+| **Cloud Fallback (Priority 5)** | Anthropic | via API | Claude for analysis/writing |
+| **Cloud Fallback (Priority 6)** | Gemini | via API | Google models for specific capabilities |
+
+**Provider Interface:** All providers implement unified `ModelProvider` interface. Router selects based on capability, health, priority — never hardcoded.
 
 ### 3.2 Data Management
 
@@ -257,7 +320,37 @@ jobs:
 | **Consolidation** | cron + custom jobs | Scheduled processing |
 | **Retrieval** | Tantivy/Elasticsearch | Fast search, relevance |
 
-### 3.3 Infrastructure
+### 3.3 Model Provider Interface
+
+> **CharOS never assumes where inference runs.**
+>
+> All providers implement the same interface:
+
+```typescript
+interface ModelProvider {
+  readonly id: string;
+  readonly name: string;
+  readonly capabilities: ModelCapability[];
+  readonly priority: number;
+  
+  initialize(config: ProviderConfig): Promise<void>;
+  isHealthy(): Promise<boolean>;
+  dispose(): Promise<void>;
+  
+  listModels(): Promise<ModelInfo[]>;
+  
+  complete(request: CompletionRequest): Promise<CompletionResponse>;
+  stream(request: CompletionRequest): AsyncIterable<CompletionChunk>;
+  
+  getStatus(): ProviderStatus;
+}
+```
+
+**Priority Chain:** Ollama (Windows) → OpenRouter → NVIDIA NIM → OpenAI → Anthropic → Gemini
+
+### 3.4 Infrastructure
+
+### 3.4 Infrastructure
 
 **Development Environment:**
 - **Version Control**: Git with conventional commits
