@@ -23,17 +23,6 @@
 | **Local-First, Cloud-Optional** | Local execution by default, cloud fallback only when needed | Vendor lock-in, privacy concerns |
 | **Deterministic Routing** | Context-aware model selection, consistent behavior | Unpredictable AI responses |
 
-### 1.3 Development Environment Constraints
-
-> **CharOS runs in WSL2 Ubuntu on Windows 11.**
->
-> **Ollama is ALREADY installed on Windows. Do NOT reinstall it.**
->
-> - WSL communicates with the Windows Ollama daemon via `http://host.docker.internal:11434`
-> - Existing models (qwen3:14b, gemma-4-abliterated, etc.) are available automatically
-> - Never download models unless explicitly requested by user
-> - Detect available models at runtime via `/api/tags`
-
 ---
 
 ## 2. Provider Architecture
@@ -77,13 +66,13 @@ graph TB
         Speech[SpeechProvider]
     end
 
-    subgraph LocalProviders[Local Implementation - Priority 1]
-        Ollama[Ollama Provider (Windows Host)]
+    subgraph LocalProviders[Local Implementation]
+        Ollama[Ollama Provider]
+        GGUF[GGUF Provider]
+        llamaCpp[Llama.cpp Provider]
     end
 
-    subgraph CloudProviders[Cloud Fallback - Priority 2+]
-        OpenRouter[OpenRouter Provider]
-        NVIDIANIM[NVIDIA NIM Provider]
+    subgraph CloudProviders[Cloud Fallback]
         OpenAI[OpenAI Provider]
         Anthropic[Anthropic Provider]
         Gemini[Gemini Provider]
@@ -103,25 +92,7 @@ graph TB
     Speech --> CloudProviders
 ```
 
-### 2.3 Provider Priority Order
-
-| Priority | Provider | Type | Notes |
-|----------|----------|------|-------|
-| **1** | **Ollama (Windows host)** | Local | Reuse existing installation; detect endpoint at runtime |
-| **2** | **OpenRouter** | Cloud | Multi-model gateway; fallback for complex reasoning |
-| **3** | **NVIDIA NIM** | Cloud | Enterprise/local GPU accelerated |
-| **4** | **OpenAI** | Cloud | GPT-4o, o1 for complex tasks |
-| **5** | **Anthropic** | Cloud | Claude for analysis/writing |
-| **6** | **Gemini** | Cloud | Google models for specific capabilities |
-
-> **All providers MUST implement the same `ModelProvider` interface.**
->
-> **Never hardcode a provider.** The router selects based on capability, health, and priority.
->
-> **Inference routing is managed by NemoClaw's Routed Inference — not by CharOS.**
-> CharOS submits tasks to NemoClaw; NemoClaw handles provider selection and fallback chains.
-
-### 2.4 Provider Registration
+### 2.3 Provider Registration
 
 ```json
 {
@@ -139,74 +110,6 @@ graph TB
   "healthCheck": {"interval": 300000},
   "maxTokens": 8192,
   "maxContextLength": 32768
-}
-```
-
----
-
-## 2.5 Current Development Environment
-
-### 2.5.1 Operating System & Runtime
-
-| Component | Configuration |
-|-----------|---------------|
-| **Host OS** | Windows 11 |
-| **Development** | WSL2 Ubuntu |
-| **Ollama** | **Already installed on Windows host** — **Do NOT reinstall** |
-| **Communication** | WSL → Windows Ollama via `http://host.docker.internal:11434` or `http://172.17.0.1:11434` |
-| **Foundation** | **NemoClaw** — NVIDIA open-source sandbox agent runtime |
-
-### 2.5.2 Existing Models (Auto-Detected)
-
-The following models are already available in the Windows Ollama installation:
-
-| Model | Purpose | Capabilities |
-|-------|---------|--------------|
-| **qwen3:14b** | Coding/Reasoning | Code generation, analysis, refactoring |
-| **gemma-4-heretic** (abliterated) | General/Creative | Conversation, planning, summarization |
-| *Others* | Auto-discovered | Listed via `/api/tags` at runtime |
-
-> **CharOS MUST auto-detect available models at startup via NemoClaw.**
->
-> **Never download models unless explicitly requested by user.**
-
-### 2.5.3 ModelProvider Interface Principle
-
-> **CharOS must never assume where inference happens.**
->
-> Inference may run:
-> - Locally via Ollama (Windows host, accessed from WSL via NemoClaw)
-> - Remotely via OpenRouter (via NemoClaw)
-> - Via NVIDIA NIM (via NemoClaw)
-> - Via another provider managed by NemoClaw
->
-> **The rest of CharOS must not know or care.**
->
-> **CharOS communicates with NemoClaw CLI. NemoClaw manages inference routing.**
-
-```typescript
-// CharOS talks to NemoClaw, NOT to providers directly
-interface NemoClawAdapter {
-  executeTask(task: Task, context: ContextBundle): Promise<TaskResult>;
-  listModels(): Promise<ModelInfo[]>;
-  checkHealth(): Promise<boolean>;
-  createSandbox(blueprint: BlueprintConfig): Promise<SandboxHandle>;
-  destroySandbox(handle: SandboxHandle): Promise<void>;
-}
-
-// NemoClaw internally uses ModelProvider for each provider
-interface ModelProvider {
-  readonly id: string;
-  readonly name: string;
-  readonly capabilities: ModelCapability[];
-  readonly priority: number;
-  initialize(config: ProviderConfig): Promise<void>;
-  isHealthy(): Promise<boolean>;
-  dispose(): Promise<void>;
-  listModels(): Promise<ModelInfo[]>;
-  complete(request: CompletionRequest): Promise<CompletionResponse>;
-  stream(request: CompletionRequest): AsyncIterable<CompletionChunk>;
-  getStatus(): ProviderStatus;
 }
 ```
 

@@ -15,7 +15,8 @@ Before making any change, read the following in order:
 2.  `roadmap.md`
 3.  `PROJECT_BIBLE.md`
 4.  `AI_CONTEXT.md` (this file)
-5.  Relevant documents under `docs/`
+5.  `docs/AGENT_EXECUTION_BRIEF.md`
+6.  Relevant documents under `docs/`
 
 Do **not** assume undocumented behavior.
 
@@ -33,6 +34,10 @@ Current objective:
     agents.
 
 The documentation is the current source of truth.
+
+For active implementation priorities and contributor operating rules, read
+`docs/AGENT_EXECUTION_BRIEF.md`. It establishes the free/open-source-first
+baseline and the mandatory foundation-first implementation order.
 
 ------------------------------------------------------------------------
 

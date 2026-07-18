@@ -98,6 +98,22 @@ Cloud services are optional enhancements---not requirements.
 
 ------------------------------------------------------------------------
 
+## Open Source and Zero-Cost First
+
+CharOS must remain useful to broke students, independent engineers, and
+open-source contributors. The baseline experience must work with free,
+local, open-source components and user-owned data.
+
+Paid APIs, cloud inference, managed databases, and hosted services are
+optional upgrades only. A paid dependency is acceptable only when the
+free/local path has a documented limitation, the user explicitly chooses
+the upgrade, and a portable free/local fallback remains available.
+
+No core feature may require a credit card, proprietary model, vendor
+account, or cloud-hosted data store.
+
+------------------------------------------------------------------------
+
 ## Privacy by Default
 
 Users own:

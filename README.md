@@ -84,6 +84,7 @@ See:
 # Principles
 
 -   Local-first
+-   Free and open-source first
 -   Modular
 -   Character-first
 -   Open source

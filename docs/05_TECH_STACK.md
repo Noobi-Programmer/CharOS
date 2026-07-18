@@ -5,48 +5,6 @@
 
 ---
 
-## 0. Development Environment
-
-### 0.1 Operating System & Runtime
-
-| Component | Details |
-|-----------|---------|
-| **Host OS** | Windows 11 |
-| **Development Environment** | WSL2 Ubuntu |
-| **Primary Shell** | zsh (Oh My Zsh) |
-| **Package Manager** | apt (WSL), winget/scoop (Windows) |
-
-### 0.2 Existing AI Infrastructure
-
-**Ollama is ALREADY installed on Windows.**
-
-- **Do NOT reinstall Ollama.**
-- **Do NOT create another Ollama instance in WSL.**
-- Reuse the existing Windows Ollama server from WSL.
-- WSL connects to Windows Ollama via `http://host.docker.internal:11434` (or `http://172.17.0.1:11434` / `http://$(cat /etc/resolv.conf | grep nameserver | awk '{print $2}'):11434`).
-
-**Existing Models (already installed):**
-- `qwen3:14b` (code/reasoning)
-- `gemma-4-heretic` / `gemma-4-abliterated` (general reasoning)
-- Additional models available — detect dynamically at runtime.
-
-**Provider Detection Logic:**
-```typescript
-async function detectOllamaEndpoint(): Promise<string> {
-  const candidates = [
-    'http://host.docker.internal:11434',
-    'http://172.17.0.1:11434',
-    `http://${getWindowsHostIP()}:11434`
-  ];
-  for (const url of candidates) {
-    if (await checkHealth(url)) return url;
-  }
-  throw new Error('Ollama not reachable from WSL');
-}
-```
-
----
-
 ## 1. Technology Philosophy
 
 ### 1.1 Technology Selection Principles
@@ -64,22 +22,7 @@ async function detectOllamaEndpoint(): Promise<string> {
 | **Maintainability** | Readable, well-documented code | TypeScript over JavaScript |
 | **Extensibility** | Plugin architecture, clear interfaces | Provider pattern, Event Bus |
 
-### 2.1 Current Development Environment
-
-| Component | Configuration |
-|-----------|---------------|
-| **Host OS** | Windows 11 |
-| **Development Runtime** | WSL2 (Ubuntu) |
-| **Ollama** | **Pre-installed on Windows host** — reuse existing instance |
-| **WSL → Windows Ollama** | `http://host.docker.internal:11434` or `http://172.17.0.1:11434` |
-| **Existing Models** | `qwen3:14b`, `gemma-4-heretic` (abliterated), auto-discover others |
-| **NemoClaw Foundation** | NVIDIA open-source sandbox agent runtime |
-
-> **Do NOT install Ollama in WSL. Do NOT create another Ollama instance.**
->
-> **Reuse the Windows Ollama daemon. Auto-detect models at runtime.**
-
-### 2.2 The CharOS Stack Metaphor
+### 1.2 The CharOS Stack Metaphor
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -94,20 +37,16 @@ async function detectOllamaEndpoint(): Promise<string> {
 │    ┌───────┼───────┐    ┌───────┼───────┐    ┌───────┼───────┐ │
 │    ▼       ▼       ▼    ▼       ▼    ▼       ▼       ▼      │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌─────────┐ │
-│  │  UI      │ │  RUNTIME   │ │  SKILLS   │ │  MEMORY  │ │ PLUGINS │ │
-│  │  LAYER   │ │  ENGINE    │ │  SYSTEM   │ │  SYSTEM  │ │        │ │
+│  │  UI      │ │  RUNTIME   │ │  SKILLS   │ │  MODELS  │ │  MEMORY   │ │
+│  │  LAYER   │ │  ENGINE    │ │  SYSTEM   │ │  SYSTEM  │ │  SYSTEM  │ │
 │  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └─────────┘ │
 │                               ▼                               │
-│              ┌────────────────────────────────────────────────┐ │
-│              │       NEMOCLAW FOUNDATION (NVIDIA)            │ │
-│              │  ┌──────────┐ ┌──────────┐ ┌────────────────┐ │ │
-│              │  │OpenShell │ │  Routed  │ │Blueprint +     │ │ │
-│              │  │ Sandbox  │ │Inference │ │Network Policies│ │ │
-│              │  └──────────┘ └──────────┘ └────────────────┘ │ │
-│              └────────────────────────────────────────────────┘ │
+│                  ┌─────────────────────────────────────────────┐ │
+│                  │                ATOMIZATION LAYER                │ │
+│                  └─────────────────────────────────────────────┘ │
 │                               ▼                               │
 │      ┌─────────────────────────────────────────────────────┐   │
-│      │     INFRASTRUCTURE (Docker + Rust/TypeScript)       │   │
+│      │          FOUNDATION (Rust/TypeScript)               │   │
 │      └─────────────────────────────────────────────────────┘   │
 ```
 
@@ -123,21 +62,6 @@ async function detectOllamaEndpoint(): Promise<string> {
 | **React** | `18.x` | Web platform | Component-based, ecosystem maturity |
 | **Vite** | `4.x` | Build tool | Fast HMR, optimized bundles |
 | **TypeScript** | `5.x` | All | Type safety, better developer experience |
-| **NemoClaw** | latest | Linux (Docker) | NVIDIA open-source sandbox agent runtime — OpenShell, routed inference, network policies |
-
-### 2.2 NemoClaw Foundation Integration
-
-> **CharOS is built on top of NemoClaw, which provides sandboxed agent execution via OpenShell.**
->
-> **Do NOT install Ollama inside WSL. NemoClaw routes inference to the Windows Ollama host.**
-
-| NemoClaw Component | Purpose | CharOS Usage |
-|-------------------|---------|--------------|
-| **OpenShell Sandbox** | Containerized agent runtime | CharOS agent runs inside OpenShell sandbox |
-| **Routed Inference** | Multi-provider model routing | Routes to Ollama (Windows), OpenRouter, NIM, OpenAI, Anthropic, Gemini |
-| **Blueprint Orchestration** | Sandbox lifecycle management | Declare CharOS blueprint, sandbox create/start/stop |
-| **Network Policies** | Egress control and security | Govern what the agent can access |
-| **CLI** | Agent management commands | `nemoclaw` CLI invoked from CharOS orchestrator |
 
 **Tauri Implementation:**
 
@@ -304,11 +228,10 @@ jobs:
 
 #### Model Framework
 
-**Why NemoClaw + Ollama + Cloud adapters?**
-- **NemoClaw**: Provides sandboxed agent runtime and routed inference to all providers
-- **Ollama (Windows host)**: Local-first, privacy-preserving — no install in WSL
-- **NemoClaw Inference Router**: Manages provider priority: Ollama → OpenRouter → NVIDIA NIM → OpenAI → Anthropic → Gemini
-- **Adapter pattern**: Unified `ModelProvider` interface — CharOS never knows where inference runs
+**Why Ollama + OpenAI adapters?**
+- **Ollama**: Local-first, privacy-preserving, easy deployment
+- **OpenAI API**: Fallback for complex reasoning, continuous updates
+- **Adapter pattern**: Model-agnostic provider interface
 
 ---
 
@@ -318,23 +241,11 @@ jobs:
 
 | Component | Technology | Version | Rationale |
 |-----------|------------|---------|-----------|
-| **Agent Runtime & Sandbox** | **NemoClaw (NVIDIA OpenShell)** | latest | Foundation layer — sandboxed agent execution, blueprint orchestration, security |
-| **Inference Routing** | **NemoClaw Routed Inference** | latest | Manages provider priority, health checks, fallback chains |
 | **Speech Recognition** | Handy Parakeet | v3 | Local-first, optimized for voice commands |
-| **Local Models** | **Ollama (Windows host, via NemoClaw)** | latest | **Already installed — reuse existing daemon. Do NOT install in WSL** |
-| **Auto-Discovered Models** | Runtime detection | runtime | `qwen3:14b`, `gemma-4-heretic`, others via `/api/tags` |
+| **LLM Runtime** | llama.cpp | latest | Lightweight, customizable |
 | **Vision** | Qwen2-VL | latest | High accuracy, local execution |
-| **Cloud Fallback (Priority 2)** | OpenRouter | via NemoClaw | Multi-model gateway for complex reasoning |
-| **Cloud Fallback (Priority 3)** | NVIDIA NIM | via NemoClaw | Enterprise/local GPU accelerated |
-| **Cloud Fallback (Priority 4)** | OpenAI | via NemoClaw | GPT-4o, o1 for complex tasks |
-| **Cloud Fallback (Priority 5)** | Anthropic | via NemoClaw | Claude for analysis/writing |
-| **Cloud Fallback (Priority 6)** | Gemini | via NemoClaw | Google models for specific capabilities |
-
-> **All inference goes through NemoClaw's Routed Inference.**
->
-> **CharOS submits tasks to NemoClaw — it never calls model providers directly.**
->
-> All providers implement unified `ModelProvider` interface.
+| **Code Generation** | Qwen3 Coder Heretic | latest | Specialized for coding tasks |
+| **Cloud Fallback** | OpenAI/Gemini/GLM | through API | Complex reasoning, broader knowledge |
 
 ### 3.2 Data Management
 
@@ -346,39 +257,7 @@ jobs:
 | **Consolidation** | cron + custom jobs | Scheduled processing |
 | **Retrieval** | Tantivy/Elasticsearch | Fast search, relevance |
 
-### 3.3 Model Provider Interface
-
-> **CharOS never assumes where inference runs.**
->
-> All providers implement the same interface. NemoClaw's Routed Inference handles the actual routing:
-
-```typescript
-interface ModelProvider {
-  readonly id: string;
-  readonly name: string;
-  readonly capabilities: ModelCapability[];
-  readonly priority: number;
-  
-  initialize(config: ProviderConfig): Promise<void>;
-  isHealthy(): Promise<boolean>;
-  dispose(): Promise<void>;
-  
-  listModels(): Promise<ModelInfo[]>;
-  
-  complete(request: CompletionRequest): Promise<CompletionResponse>;
-  stream(request: CompletionRequest): AsyncIterable<CompletionChunk>;
-  
-  getStatus(): ProviderStatus;
-}
-```
-
-**Priority Chain (managed by NemoClaw):** Ollama (Windows) → OpenRouter → NVIDIA NIM → OpenAI → Anthropic → Gemini
-
-**CharOS communicates with NemoClaw CLI (subprocess JSON-RPC)** — not directly with model providers.
-
-### 3.4 Infrastructure
-
-### 3.4 Infrastructure
+### 3.3 Infrastructure
 
 **Development Environment:**
 - **Version Control**: Git with conventional commits
